@@ -1,4 +1,4 @@
-const V = 'hn-v1';
+const V = 'hn-v2';
 const FILES = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -13,19 +13,16 @@ self.addEventListener('activate', e => {
   );
 });
 
-// 先用快取（離線可用），同時背景更新
+// 網路優先（更新後立刻生效），離線時用快取
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then(hit => {
-      const net = fetch(e.request).then(r => {
-        if (r.ok && new URL(e.request.url).origin === location.origin) {
-          const cp = r.clone();
-          caches.open(V).then(c => c.put(e.request, cp));
-        }
-        return r;
-      }).catch(() => hit);
-      return hit || net;
-    })
+    fetch(e.request).then(r => {
+      if (r.ok && new URL(e.request.url).origin === location.origin) {
+        const cp = r.clone();
+        caches.open(V).then(c => c.put(e.request, cp));
+      }
+      return r;
+    }).catch(() => caches.match(e.request))
   );
 });
