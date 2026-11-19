@@ -107,17 +107,16 @@ main{padding:10px 14px}
 .chip b{color:var(--mut);font-weight:700}
 .chip.off{opacity:.42;filter:grayscale(1)}
 .paper{margin:8px 14px;padding:20px 18px 14px;background:var(--surface);border-radius:22px;box-shadow:var(--shadow)}
-.para{font-family:Georgia,"Iowan Old Style","Noto Serif",serif;font-size:18.5px;line-height:2.85;margin:0 0 6px;word-break:break-word;color:var(--ink)}
-.para.nolab{line-height:2.1}
+.pw{position:relative;margin:0 0 12px}
+.para{font-family:Georgia,"Iowan Old Style","Noto Serif",serif;font-size:18.5px;line-height:1.9;margin:0;word-break:break-word;color:var(--ink)}
+.labs{position:absolute;inset:0;pointer-events:none;-webkit-user-select:none;user-select:none}
 .hl{cursor:pointer;border-radius:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone;transition:filter .15s}
 .hl:active{filter:brightness(.9)}
 .gap{cursor:pointer;background-image:linear-gradient(90deg,var(--s-collocation) 45%,transparent 45%);background-size:6px 2px;background-repeat:repeat-x;background-position:0 86%}
-.anc{display:inline-block;width:0;height:0;position:relative;vertical-align:baseline;-webkit-user-select:none;user-select:none;pointer-events:none}
-.tgs{position:absolute;left:0;top:8px;white-space:nowrap;font:700 11px/1.2 -apple-system,"PingFang TC","Noto Sans TC",sans-serif;letter-spacing:.01em;animation:fade .4s both}
-.tgs.rt{left:auto;right:0}
-.tg::after{content:attr(data-tg)}
-.tg+.tg::before{content:" · ";color:var(--mut)}
-.tg.vocab{color:var(--t-vocab)}.tg.clause{color:var(--t-clause)}.tg.connective{color:var(--t-connective)}.tg.collocation{color:var(--t-collocation)}
+.lb{position:absolute;left:0;top:0;white-space:nowrap;font:700 11.5px/1.3 -apple-system,"PingFang TC","Noto Sans TC",sans-serif;letter-spacing:.01em}
+.lb.wrap{white-space:normal}
+.lb .ph{font-weight:600;opacity:.92}
+.lb.vocab{color:var(--t-vocab)}.lb.clause{color:var(--t-clause)}.lb.connective{color:var(--t-connective)}.lb.collocation{color:var(--t-collocation)}
 .grp h2{display:flex;align-items:center;gap:8px;font-size:14px;margin:16px 0 4px}
 .grp:first-child h2{margin-top:2px}
 .grp h2 small{color:var(--mut);font-weight:600}

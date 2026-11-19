@@ -406,8 +406,7 @@ function renderUnit() {
 function textHtml(u) {
   const ps = u.paras.map((p, i) => {
     if (!p) return '';
-    const h = paraHtml(u, i);
-    return `<p class="para${h.includes('class="anc"') ? '' : ' nolab'}" data-i="${i}">${h}</p>`;
+    return `<div class="pw"><p class="para" data-i="${i}">${paraHtml(u, i)}</p><div class="labs" aria-hidden="true"></div></div>`;
   }).join('');
   return `<div class="paper">${ps}</div><p class="tip">${S.mode === 'edit' ? '選取文字即可新增重點；點螢光處可修改或刪除' : '點螢光處可查看詳細；要修改請按右上角「編輯」'}</p>`;
 }
@@ -420,14 +419,9 @@ function paraHtml(u, i) {
   hls.forEach(h => partsOf(h).forEach(p => { cuts.add(Math.max(0, p.s)); cuts.add(Math.min(len, p.e)); }));
   const pts = [...cuts].sort((a, b) => a - b);
   const covers = (h, a, b) => partsOf(h).some(p => p.s <= a && p.e >= b);
-  const starts = {};
-  hls.forEach(h => { const lab = labelOf(h); if (lab) { const s = partsOf(h)[0].s; (starts[s] = starts[s] || []).push({ h, lab }); } });
   let out = '';
   for (let k = 0; k < pts.length - 1; k++) {
     const a = pts[k], b = pts[k + 1], seg = text.slice(a, b);
-    if (starts[a]) {
-      out += `<span class="anc" aria-hidden="true"><span class="tgs">${starts[a].sort((x, y) => lenOf(x.h) - lenOf(y.h)).map(x => `<span class="tg ${x.h.type}" data-tg="${esc(x.lab)}"></span>`).join('')}</span></span>`;
-    }
     const cov = hls.filter(h => covers(h, a, b)).sort((x, y) => lenOf(x) - lenOf(y));
     if (!cov.length) {
       const g = hls.find(h => h.type === 'collocation' && partsOf(h).length > 1 && h.s <= a && h.e >= b);
@@ -442,25 +436,83 @@ function paraHtml(u, i) {
   return out;
 }
 
-/* 標註之間避免互相覆蓋 */
+/* ---------- 標註圖層：浮在文字下方，不佔原文空間 ----------
+   標註放在獨立的 .labs 圖層，位置由文字實際座標計算。
+   空間不夠時：太長的標註自動換行；彼此重疊的標註往下疊一列。
+   只調整該段落的行距讓出空間，不會移動原文的字距或詞間距。 */
 let layoutRaf = 0;
 function layoutSoon() { cancelAnimationFrame(layoutRaf); layoutRaf = requestAnimationFrame(layoutLabels); }
-function layoutLabels() {
-  const body = $('#body'); if (!body) return;
-  const ancs = [...body.querySelectorAll('.anc')];
-  ancs.forEach(a => { a.style.marginLeft = ''; a.firstChild.classList.remove('rt'); });
-  const paper = body.querySelector('.paper');
-  const right = (paper ? paper.getBoundingClientRect().right : innerWidth) - 12;
-  let prev = null;
-  for (const a of ancs) {
-    const t = a.firstChild, w = t.getBoundingClientRect().width;
-    let r = a.getBoundingClientRect();
-    if (prev && Math.abs(r.top - prev.top) < 10 && r.left < prev.right + 8) {
-      a.style.marginLeft = (prev.right + 8 - r.left) + 'px'; r = a.getBoundingClientRect();
+function labelHtml(h) {
+  if (h.type === 'collocation') return (h.phrase ? `<span class="ph">${esc(h.phrase)}</span> ` : '') + esc(h.zh || '');
+  return esc(labelOf(h));
+}
+function charRect(p, off) {
+  const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT); let n, acc = 0;
+  while ((n = w.nextNode())) {
+    const l = n.data.length;
+    if (off < acc + l) {
+      const r = document.createRange(); r.setStart(n, off - acc); r.setEnd(n, off - acc + 1);
+      return r.getClientRects()[0] || r.getBoundingClientRect();
     }
-    if (r.left + w > right) { t.classList.add('rt'); prev = { top: r.top, right: r.left }; }
-    else prev = { top: r.top, right: r.left + w };
+    acc += l;
   }
+  return null;
+}
+function layoutLabels() {
+  const body = $('#body'); if (!body || !S.u) return;
+  const GAP = 6, ROW = 2;
+  body.querySelectorAll('.pw').forEach(pw => {
+    const p = pw.querySelector('.para'), lab = pw.querySelector('.labs'); if (!p || !lab) return;
+    const i = +p.dataset.i;
+    const items = S.u.hls.filter(h => h.para === i && !S.hidden.has(h.type))
+      .map(h => ({ h, html: labelHtml(h), s: partsOf(h)[0].s })).filter(x => x.html.trim());
+    lab.innerHTML = ''; p.style.lineHeight = '';
+    if (!items.length) return;
+    const W = p.clientWidth, maxW = Math.max(150, W * 0.62);
+    const els = items.map(it => {
+      const e = document.createElement('span'); e.className = 'lb ' + it.h.type; e.innerHTML = it.html; lab.appendChild(e); it.el = e; return e;
+    });
+    items.forEach(it => {
+      let w = it.el.offsetWidth;
+      if (w > maxW) { it.el.classList.add('wrap'); it.el.style.width = maxW + 'px'; w = maxW; }
+      it.w = Math.ceil(w); it.hgt = it.el.offsetHeight;
+    });
+    // 第一輪：用原始行距量出每個標註所在的行，排版成列
+    let pr = pw.getBoundingClientRect(), glyph = 0;
+    const lines = new Map();
+    items.forEach(it => {
+      const r = charRect(p, it.s); if (!r) return;
+      glyph = glyph || r.height;
+      it.ax = r.left - pr.left;
+      const key = Math.round(r.top / 4);
+      if (!lines.has(key)) lines.set(key, []);
+      lines.get(key).push(it);
+    });
+    let need = 0;
+    lines.forEach(arr => {
+      arr.sort((a, b) => a.ax - b.ax);
+      const placed = [];
+      arr.forEach(it => {
+        it.x = Math.max(0, Math.min(it.ax, W - it.w)); it.y = 0;
+        for (let guard = 0; guard < 20; guard++) {
+          const hit = placed.find(b => it.x < b.x + b.w + GAP && b.x < it.x + it.w + GAP && it.y < b.y + b.hgt + ROW && b.y < it.y + it.hgt + ROW);
+          if (!hit) break;
+          it.y = hit.y + hit.hgt + ROW;
+        }
+        placed.push(it); need = Math.max(need, it.y + it.hgt);
+      });
+    });
+    // 只加大該段落的行距，讓標註有位置放
+    const fs = parseFloat(getComputedStyle(p).fontSize);
+    p.style.lineHeight = Math.ceil(Math.max(fs * 1.9, (glyph || fs * 1.3) + need + 12)) + 'px';
+    // 第二輪：行距改變後重新量測，定位標註
+    pr = pw.getBoundingClientRect();
+    items.forEach(it => {
+      const r = charRect(p, it.s); if (!r || it.x == null) return;
+      it.el.style.left = Math.round(it.x) + 'px';
+      it.el.style.top = Math.round(r.bottom - pr.top + 1 + it.y) + 'px';
+    });
+  });
 }
 addEventListener('resize', layoutSoon);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(layoutSoon);
